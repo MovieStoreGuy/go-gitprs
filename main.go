@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/MovieStoreGuy/prcheck/service"
+	"github.com/MovieStoreGuy/go-gitprs/service"
 	"github.com/fatih/color"
 )
 

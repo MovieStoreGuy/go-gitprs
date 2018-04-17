@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/MovieStoreGuy/prcheck/types"
+	"github.com/MovieStoreGuy/go-gitprs/types"
 	"github.com/google/go-github/github"
 	"golang.org/x/oauth2"
 )
