@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"regexp"
+	"strings"
 
 	"github.com/MovieStoreGuy/prcheck/types"
 	"github.com/google/go-github/github"
@@ -12,7 +14,6 @@ import (
 
 // Github is an object to cache important information
 type Github struct {
-	user         string
 	team         string
 	token        string
 	organisation string
@@ -20,7 +21,7 @@ type Github struct {
 }
 
 // New will configure a github ready for use
-func New(user, org, team, token string) *Github {
+func New(org, team, token string) *Github {
 	var authClient *http.Client
 	if token != "" {
 		ts := oauth2.StaticTokenSource(
@@ -29,7 +30,6 @@ func New(user, org, team, token string) *Github {
 		authClient = oauth2.NewClient(context.Background(), ts)
 	}
 	return &Github{
-		user:         user,
 		team:         team,
 		token:        token,
 		organisation: org,
@@ -46,7 +46,7 @@ func (g *Github) GetOpenPrs() ([]types.Project, error) {
 	case g.organisation != "" && g.token != "":
 		// Get the organisation open projects
 		repos, err = g.getOrgProjects()
-	case g.user != "" || g.token != "":
+	case g.token != "":
 		// Get the users project
 		repos, err = g.getUsersProjects()
 	default:
@@ -79,7 +79,7 @@ func (g *Github) getUsersProjects() ([]*github.Repository, error) {
 	projects := []*github.Repository{}
 	opt := &github.RepositoryListOptions{}
 	for {
-		items, resp, err := g.client.Repositories.List(context.Background(), g.user, opt)
+		items, resp, err := g.client.Repositories.List(context.Background(), "", opt)
 		if err != nil {
 			return nil, err
 		}
@@ -96,6 +96,9 @@ func (g *Github) getUsersProjects() ([]*github.Repository, error) {
 func (g *Github) getAllOpenPrs(projects []*github.Repository) ([]types.Project, error) {
 	collection := []types.Project{}
 	for _, project := range projects {
+		if g.team != "" && !g.teamContributes(project) {
+			continue
+		}
 		opt := &github.PullRequestListOptions{}
 		for {
 			items, resp, err := g.client.PullRequests.List(context.Background(), project.GetOwner().GetLogin(), project.GetName(), opt)
@@ -124,4 +127,24 @@ func (g *Github) getAllOpenPrs(projects []*github.Repository) ([]types.Project, 
 		}
 	}
 	return collection, nil
+}
+
+func (g *Github) teamContributes(project *github.Repository) bool {
+	opt := &github.ListOptions{}
+	for {
+		teams, resp, err := g.client.Repositories.ListTeams(context.Background(), project.GetOwner().GetLogin(), project.GetName(), opt)
+		if err != nil {
+			return false
+		}
+		for _, team := range teams {
+			if regexp.MustCompile(strings.ToLower(g.team)).MatchString(strings.ToLower(team.GetName())) {
+				return true
+			}
+		}
+		if resp.NextPage == 0 {
+			break
+		}
+		opt.Page = resp.NextPage
+	}
+	return false
 }
