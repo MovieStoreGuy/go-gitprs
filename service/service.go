@@ -37,7 +37,7 @@ func New(org, team, token string) *Github {
 	}
 }
 
-func (g *Github) GetOpenPrs() ([]types.Project, error) {
+func (g *Github) GetOpenPrs() (chan types.Project, error) {
 	var (
 		repos []*github.Repository
 		err   error
@@ -55,7 +55,9 @@ func (g *Github) GetOpenPrs() ([]types.Project, error) {
 	if err != nil {
 		return nil, err
 	}
-	return g.getAllOpenPrs(repos)
+	c := make(chan types.Project)
+	go g.getAllOpenPrs(c, repos)
+	return c, nil
 }
 
 func (g *Github) getOrgProjects() ([]*github.Repository, error) {
@@ -93,8 +95,8 @@ func (g *Github) getUsersProjects() ([]*github.Repository, error) {
 	return projects, nil
 }
 
-func (g *Github) getAllOpenPrs(projects []*github.Repository) ([]types.Project, error) {
-	collection := []types.Project{}
+func (g *Github) getAllOpenPrs(c chan types.Project, projects []*github.Repository) {
+	defer close(c)
 	for _, project := range projects {
 		if g.team != "" && !g.teamContributes(project) {
 			continue
@@ -102,31 +104,31 @@ func (g *Github) getAllOpenPrs(projects []*github.Repository) ([]types.Project, 
 		opt := &github.PullRequestListOptions{}
 		for {
 			items, resp, err := g.client.PullRequests.List(context.Background(), project.GetOwner().GetLogin(), project.GetName(), opt)
+			repo := types.Project{}
 			if err != nil {
-				return nil, err
+				repo.Error = err
+				c <- repo
+				break
 			}
 			// If there is no PRs to review, don't bother listing it
 			if len(items) == 0 {
 				break
 			}
 			// Do the processing here plz
-			repo := types.Project{
-				Name: project.GetName(),
-			}
+			repo.Name = project.GetName()
 			for _, item := range items {
 				repo.PullRequests = append(repo.PullRequests, types.PullRequest{
 					Title: item.GetTitle(),
 					Link:  item.GetHTMLURL(),
 				})
 			}
-			collection = append(collection, repo)
+			c <- repo
 			if resp.NextPage == 0 {
 				break
 			}
 			opt.Page = resp.NextPage
 		}
 	}
-	return collection, nil
 }
 
 func (g *Github) teamContributes(project *github.Repository) bool {

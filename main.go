@@ -31,7 +31,11 @@ func main() {
 		flag.Usage()
 		os.Exit(-1)
 	}
-	for _, project := range projects {
+	for project := range projects {
+		if project.Error != nil {
+			color.Red("Issue with getting Project information due to: %v", project.Error)
+			continue
+		}
 		color.Green("Project: %v", project.Name)
 		for _, pr := range project.PullRequests {
 			color.Yellow("\t%v", pr.Title)
