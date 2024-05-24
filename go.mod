@@ -1,4 +1,4 @@
-module github.com/MovieStoreGuy/go-gitprs
+module github.com/MovieStoreGuy/go-gitprs/v34
 
 go 1.22.3
 
